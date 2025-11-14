@@ -34,7 +34,8 @@ export class AuthService {
             .insert([{
                 id: authData.user.id,
                 username: username,
-                avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`
+                avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`,
+                email: email
             }])
             .select()
             .single();
@@ -117,6 +118,25 @@ export class AuthService {
             email: user.email,
             username: profileData.username,
             avatar_url: profileData.avatar_url
+        };
+    }
+
+    async getUserById(userId) {
+        const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        if (error) {
+            throw new Error("Không thể lấy thông tin người dùng.");
+        }
+        return {
+            id: profileData.id,
+            email: profileData.email,
+            username: profileData.username,
+            avatar_url: profileData.avatar_url,
+            bio: profileData.bio || null,
+            created_at: profileData.created_at
         };
     }
 }
