@@ -46,13 +46,3 @@ export async function getMe(req, res) {
         res.status(400).json({ error: error.message });
     }
 }
-
-export async function getUserById(req, res) {
-    try {
-        const userId = req.params.id;
-        const result = await authService.getUserById(userId);
-        res.json(result);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-}

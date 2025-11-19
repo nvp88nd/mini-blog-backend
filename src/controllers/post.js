@@ -6,13 +6,41 @@ function getToken(req) {
 }
 
 export async function getAllPosts(req, res) {
-    const { data, error } = await supabase
-        .from("posts_with_all")
-        .select("*")
-        .order("created_at", { ascending: false });
+    const { search, page = 1, limit = 10 } = req.query;
 
-    if (error) return res.status(400).json({ error: error.message });
-    res.json(data);
+    try {
+        let query = supabase
+            .from("posts_with_all")
+            .select("*", { count: 'exact' });
+
+        // Search functionality
+        if (search && search.trim()) {
+            const searchTerm = `%${search.trim()}%`;
+            query = query.or(`title.ilike.${searchTerm},content.ilike.${searchTerm},user->>username.ilike.${searchTerm}`);
+        }
+
+        // Pagination
+        const from = (parseInt(page) - 1) * parseInt(limit);
+        const to = from + parseInt(limit) - 1;
+
+        const { data, error, count } = await query
+            .order("created_at", { ascending: false })
+            .range(from, to);
+
+        if (error) return res.status(400).json({ error: error.message });
+
+        res.json({
+            data,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: count,
+                totalPages: Math.ceil(count / parseInt(limit))
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
 export async function getPostById(req, res) {
