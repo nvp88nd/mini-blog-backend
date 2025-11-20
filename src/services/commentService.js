@@ -8,46 +8,39 @@ function supabaseWithAuth(token) {
                 Authorization: `Bearer ${token}`,
             }
         }
-    })
+    });
 }
 
 export class CommentService {
     async getCommentsByPostId(postId) {
         const { data, error } = await supabase
-            .from("comments")
-            .select(`
-                id,
-                content,
-                created_at,
-                user:author_id (
-                    id,
-                    username,
-                    avatar_url
-                )
-            `)
+            .from("comments_with_user")
+            .select("*")
             .eq("post_id", postId)
             .order("created_at", { ascending: true });
 
-        if (error) throw error;
-        return data;
+        return { data, error };
     }
 
-    async createComment(postId, authorId, content, token) {
-        const supa = supabaseWithAuth(token);
+    async createComment(postId, content, user_jwt) {
+        const supa = supabaseWithAuth(user_jwt);
 
-        // Tạo comment
-        const { data: comment, error: commentError } = await supa
+        // Lấy thông tin user từ JWT
+        const { data: { user }, error: userError } = await supa.auth.getUser(user_jwt);
+        if (userError || !user) {
+            throw new Error("Không thể xác thực người dùng.");
+        }
+
+        const { data, error } = await supa
             .from("comments")
             .insert([{
                 post_id: postId,
-                author_id: authorId,
+                author_id: user.id,
                 content: content.trim()
             }])
             .select(`
-                id,
-                content,
-                created_at,
-                user:author_id (
+                *,
+                profiles:author_id (
                     id,
                     username,
                     avatar_url
@@ -55,95 +48,56 @@ export class CommentService {
             `)
             .single();
 
-        if (commentError) throw commentError;
-
-        // Cập nhật comment_count cho post
-        await this.updatePostCommentCount(postId);
-
-        return comment;
-    }
-
-    async deleteComment(commentId, userId, token) {
-        const supa = supabaseWithAuth(token);
-
-        // Kiểm tra quyền sở hữu
-        const { data: comment } = await supa
-            .from("comments")
-            .select("author_id, post_id")
-            .eq("id", commentId)
-            .single();
-
-        if (!comment) {
-            throw new Error("Không tìm thấy bình luận");
+        if (error) {
+            throw error;
         }
 
-        if (comment.author_id !== userId) {
-            throw new Error("Bạn không có quyền xóa bình luận này");
-        }
-
-        // Xóa comment
-        const { error } = await supa
-            .from("comments")
-            .delete()
-            .eq("id", commentId);
-
-        if (error) throw error;
-
-        // Cập nhật comment_count
-        await this.updatePostCommentCount(comment.post_id);
-
-        return true;
+        // Format lại data để phù hợp với frontend
+        return {
+            id: data.id,
+            content: data.content,
+            created_at: data.created_at,
+            user: {
+                id: data.profiles.id,
+                username: data.profiles.username,
+                avatar_url: data.profiles.avatar_url
+            }
+        };
     }
 
-    async updateComment(commentId, userId, content, token) {
-        const supa = supabaseWithAuth(token);
+    async deleteComment(commentId, user_jwt) {
+        const supa = supabaseWithAuth(user_jwt);
 
         // Kiểm tra quyền sở hữu
-        const { data: comment } = await supa
+        const { data: comment, error: fetchError } = await supa
             .from("comments")
             .select("author_id")
             .eq("id", commentId)
             .single();
 
-        if (!comment) {
-            throw new Error("Không tìm thấy bình luận");
+        if (fetchError) {
+            throw new Error("Không tìm thấy bình luận.");
         }
 
-        if (comment.author_id !== userId) {
-            throw new Error("Bạn không có quyền chỉnh sửa bình luận này");
+        const { data: { user }, error: userError } = await supa.auth.getUser(user_jwt);
+        if (userError || !user) {
+            throw new Error("Không thể xác thực người dùng.");
         }
 
-        // Cập nhật comment
-        const { data: updatedComment, error } = await supa
+        if (comment.author_id !== user.id) {
+            throw new Error("Bạn không có quyền xóa bình luận này.");
+        }
+
+        const { error } = await supa
             .from("comments")
-            .update({ content: content.trim() })
-            .eq("id", commentId)
-            .select(`
-                id,
-                content,
-                created_at,
-                user:author_id (
-                    id,
-                    username,
-                    avatar_url
-                )
-            `)
-            .single();
+            .delete()
+            .eq("id", commentId);
 
-        if (error) throw error;
-        return updatedComment;
-    }
+        if (error) {
+            throw error;
+        }
 
-    async updatePostCommentCount(postId) {
-        const { count } = await supabase
-            .from("comments")
-            .select("*", { count: "exact", head: true })
-            .eq("post_id", postId);
-
-        await supabase
-            .from("posts")
-            .update({ comment_count: count || 0 })
-            .eq("id", postId);
+        return { success: true };
     }
 }
 
