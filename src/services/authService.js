@@ -48,7 +48,8 @@ export class AuthService {
                 id: authData.user.id,
                 email: authData.user.email,
                 username: profileData.username,
-                avatar_url: profileData.avatar_url
+                avatar_url: profileData.avatar_url,
+                role: profileData.role
             },
             session: authData.session
         }
@@ -80,7 +81,8 @@ export class AuthService {
                 id: authData.user.id,
                 email: authData.user.email,
                 username: profileData.username,
-                avatar_url: profileData.avatar_url
+                avatar_url: profileData.avatar_url,
+                role: profileData.role
             },
             session: authData.session
         };

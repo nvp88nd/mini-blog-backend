@@ -1,18 +1,14 @@
 import express from "express";
-import { supabase } from "../services/supabase.js";
+import {
+    getCommentsByPostId,
+    createComment,
+    deleteComment
+} from "../controllers/comment.js";
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
-    const { post_id, author_id, content } = req.body;
-
-    const { data, error } = await supabase
-        .from("comments")
-        .insert([{ post_id, author_id, content }])
-        .select();
-
-    if (error) return res.status(400).json({ error: error.message });
-    res.json(data[0]);
-});
+router.get("/post/:postId", getCommentsByPostId);
+router.post("/", createComment);
+router.delete("/:id", deleteComment);
 
 export default router;

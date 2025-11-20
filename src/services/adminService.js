@@ -11,6 +11,11 @@ function supabaseWithAuth(token) {
     })
 }
 
+const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
 export class AdminService {
     async checkAdminRole(token) {
         const supa = supabaseWithAuth(token);
@@ -98,31 +103,36 @@ export class AdminService {
         await this.checkAdminRole(token);
         const supa = supabaseWithAuth(token);
 
-        // Xóa tất cả bài viết của user
-        const { data: posts } = await supa
-            .from("posts")
-            .select("id, post_images(image_url)")
-            .eq("author_id", userId);
+        // Xóa avt
+        const { data: files, error: listError } = await supa.storage
+            .from("avatars")
+            .list(userId);
 
-        // Xóa ảnh từ storage
-        if (posts) {
-            for (const post of posts) {
-                if (post.post_images?.length) {
-                    for (const img of post.post_images) {
-                        const path = img.image_url.split('/storage/v1/object/public/post-images/')[1];
-                        if (path) {
-                            await supa.storage.from("post-images").remove([path]);
-                        }
-                    }
-                }
-            }
+        if (!listError && files.length) {
+            const paths = files.map(f => `${userId}/${f.name}`);
+            const { error: removeError } = await supa.storage
+                .from("avatars")
+                .remove(paths);
+
+            if (removeError) console.warn("Failed to remove avatar folder:", removeError);
         }
 
-        // Xóa user (cascade sẽ xóa posts và comments)
-        const { error } = await supa
-            .from("profiles")
-            .delete()
-            .eq("id", userId);
+        // Xóa ảnh từ storage
+        const { data: file2s, error: list2Error } = await supa.storage
+            .from("post-images")
+            .list(userId); // list tất cả file trong folder userId
+
+        if (!list2Error && file2s.length) {
+            const paths = file2s.map(f => `${userId}/${f.name}`);
+            const { error: removeError } = await supa.storage
+                .from("post-images")
+                .remove(paths);
+
+            if (removeError) console.warn("Failed to remove post_images folder:", removeError);
+        }
+
+        // Xóa user (cascade sẽ xóa profiles và comments)
+        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
         if (error) throw error;
         return true;
@@ -168,14 +178,12 @@ export class AdminService {
             .select("is_active")
             .eq("id", userId)
             .single();
-        console.log(!user.is_active);
         const { data, error } = await supa
             .from("profiles")
             .update({ is_active: !user.is_active })
             .eq("id", userId)
             .select()
             .maybeSingle();
-        console.log(data);
         if (error) throw error;
         return data;
     }
