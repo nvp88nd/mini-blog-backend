@@ -6,7 +6,7 @@
 
 ---
 
-## 🛠️ Backend (NestJS)
+## 🛠️ Backend (NodeJS)
 
 1. Cài dependencies:
 
